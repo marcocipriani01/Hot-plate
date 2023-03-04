@@ -19,6 +19,7 @@ unsigned long lastDerivativeCalc = 0L;
 
 thermistor ntc(NTC_PIN, 0);
 AutoPID controller(&temperature, &target, &pwm, 0, 255, DEFAULT_PID_KP, DEFAULT_PID_KI, DEFAULT_PID_KD);
+MedianFilter filter(MOVING_AVERAGE_WINDOW);
 
 void setup() {
     pinMode(PWM_PIN, OUTPUT);
@@ -43,10 +44,10 @@ void setup() {
 }
 
 void loop() {
-    temperature = readTemperature();
+    temperature = filter.add(ntc.analog2temp());
     if (target <= MIN_TEMP)
         pwm = 0.0;
-    else
+    else if (filter.isReady())
         controller.run();
     analogWrite(PWM_PIN, (int) pwm);
 
@@ -68,15 +69,6 @@ void loop() {
         Serial.println(pwm);
         lastSend = t;
     }
-}
-
-double readTemperature() {
-    double sum = 0.0;
-    for (int i = 0; i < 5; i++) {
-        sum += ntc.analog2temp();
-        delay(10);
-    }
-    return sum / 5.0;
 }
 
 void serialEvent() {

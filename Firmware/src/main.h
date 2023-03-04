@@ -8,7 +8,6 @@
 #include <thermistor.h>
 
 #include "config.h"
-
-double readTemperature();
+#include "MedianFilter.h"
 
 #endif

@@ -17,4 +17,6 @@
 
 #define PID_SAMPLE_MS 250L
 
+#define MOVING_AVERAGE_WINDOW 5
+
 #endif
