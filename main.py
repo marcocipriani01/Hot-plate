@@ -78,7 +78,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
         self.pen = pg.mkPen(color=(255, 0, 0), width=3)
         self.reflow_profile_pen = pg.mkPen(color=(0, 255, 0), width=2)
         self.graphWidget.setTitle(
-            "Heatplate temperature", color="k", size="13pt")
+            "Hot plate temperature", color="k", size="13pt")
         label_style = {'color': 'k', 'font-size': '13px'}
         self.graphWidget.setLabel('left', 'Temperature (°C)', **label_style)
         self.graphWidget.setLabel('bottom', 'Time (s)', **label_style)
@@ -96,7 +96,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
         self.clear_plot_button.clicked.connect(self.clear_plot)
         self.settings_button.clicked.connect(self.open_settings)
         self.set_target_button.clicked.connect(self.changeTemp)
-        self.turn_off_button.clicked.connect(self.turn_off_heatplate)
+        self.turn_off_button.clicked.connect(self.turn_off_hot_plate)
         self.overlay_button.clicked.connect(self.show_reflow_overlay)
         self.serial_port_combo.activated.connect(self.select_device)
         # Settings dialog
@@ -137,7 +137,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
             traceback.print_exc()
             ErrorDialog(e.args[0])
 
-    def turn_off_heatplate(self):
+    def turn_off_hot_plate(self):
         self.target_temp_spinner.setValue(self.min_temp)
         self.changeTemp()
 
@@ -199,7 +199,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
         except Exception as e:
             traceback.print_exc()
             ErrorDialog(
-                "Eror: " + e.args[0] + ". Check if you are connected to the heatplate.")
+                "Eror: " + e.args[0] + ". Check if you are connected to the hot plate.")
             self.statusBar().showMessage("Settings not updated")
 
     def disconnect(self):

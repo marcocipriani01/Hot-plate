@@ -12,7 +12,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Heatplate controller</string>
+   <string>Hot plate controller</string>
   </property>
   <property name="windowIcon">
    <iconset>
