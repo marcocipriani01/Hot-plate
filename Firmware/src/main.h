@@ -9,5 +9,6 @@
 
 #include "config.h"
 #include "MedianFilter.h"
+#include "solder_profiles.h"
 
 #endif

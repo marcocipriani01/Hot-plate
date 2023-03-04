@@ -1,6 +1,6 @@
 #include "main.h"
 
-struct Struct {
+struct Settings {
     uint8_t marker;
     double kP;
     double kI;
@@ -20,6 +20,10 @@ unsigned long lastDerivativeCalc = 0L;
 thermistor ntc(NTC_PIN, 0);
 AutoPID controller(&temperature, &target, &pwm, 0, 255, DEFAULT_PID_KP, DEFAULT_PID_KI, DEFAULT_PID_KD);
 MedianFilter filter(MOVING_AVERAGE_WINDOW);
+
+int currentProfile = -1;
+int profileIndex = 0;
+unsigned long profileStartTime = 0L;
 
 void setup() {
     pinMode(PWM_PIN, OUTPUT);
@@ -41,6 +45,11 @@ void setup() {
     controller.setGains(settings.kP, settings.kI, settings.kD);
     controller.setBangBang(settings.bangBangRange);
     controller.setTimeStep(PID_SAMPLE_MS);
+
+    solderProfiles[0].name = LEADED_SMD291AX50T3_NAME;
+    solderProfiles[0].profile = &LEADED_SMD291AX50T3;
+    solderProfiles[1].name = UNLEADED_SMD291SNL_NAME;
+    solderProfiles[1].profile = &UNLEADED_SMD291SNL;
 }
 
 void loop() {
@@ -52,6 +61,25 @@ void loop() {
     analogWrite(PWM_PIN, (int) pwm);
 
     unsigned long t = millis();
+    if (currentProfile >= 0) {
+        const double (*profile)[PROFILES_SIZE][2] = solderProfiles[currentProfile].profile;
+        double delta = t - profileStartTime;
+        if (delta >= profile[profileIndex][0])
+            profileIndex++;
+
+        if (profileIndex < (PROFILES_SIZE - 2)) {
+            
+            const double (*prevPoint)[2] = profile[profileIndex];
+            const double (*nextPoint)[2] = profile[profileIndex + 1];
+            
+            
+        } else {
+            currentProfile = -1;
+            profileIndex = 0;
+            profileStartTime = 0L;
+        }
+    }
+
     if (lastDerivativeCalc == 0L) {
         lastTemperature = temperature;
         lastDerivativeCalc = t;
@@ -60,6 +88,7 @@ void loop() {
         lastTemperature = temperature;
         lastDerivativeCalc = t;
     }
+
     if ((t - lastSend) >= 100L) {
         Serial.print("A");
         Serial.print(temperature, 2);

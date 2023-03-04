@@ -8,6 +8,7 @@ This project has been inspired, and/or uses pieces of code from the following ot
 - [Apehaenger/Another-HotPlate-Firmware](https://github.com/Apehaenger/Another-HotPlate-Firmware)
 - [Apehaenger/AutoPID](https://github.com/Apehaenger/AutoPID)
 - [AllisonPessoa/heating-device](https://github.com/AllisonPessoa/heating-device)
+- [miguel5612/ThermistorLibrary](https://github.com/miguel5612/ThermistorLibrary)
 
 Special thanks to the developers of the [PidTuner](https://pidtuner.com/#/) website for making tuning easy-peasy.
 

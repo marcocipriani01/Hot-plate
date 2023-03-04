@@ -120,8 +120,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
             self.reflow_overlay = [25, 100, 150, 183, 230, 235, 230, 183, 150]
             self.reflow_overlay_time = [0, 30, 120, 150, 195, 210, 225, 240, 250]
             for i in range(len(self.reflow_overlay)):
-                self.reflow_overlay_time[i] = self.reflow_overlay_time[i] + \
-                    (time() - self.initTime)
+                self.reflow_overlay_time[i] = self.reflow_overlay_time[i] + (time() - self.initTime)
             self.graphWidget.plot(self.reflow_overlay_time, self.reflow_overlay,
                                   pen=self.reflow_profile_pen, symbol='+', symbolSize=15)
         else:
@@ -217,6 +216,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
         self.set_target_button.setDisabled(True)
         self.turn_off_button.setDisabled(True)
         self.settings_button.setDisabled(True)
+        self.overlay_button.setDisabled(True)
 
     def connect_disconnect(self):
         if self.connect_button.isChecked() == True:
@@ -249,6 +249,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
                             self.set_target_button.setDisabled(False)
                             self.turn_off_button.setDisabled(False)
                             self.settings_button.setDisabled(False)
+                            self.overlay_button.setDisabled(False)
                             self.send_settings()
                             return
                         serial_port.write("$E".encode('utf-8'))
