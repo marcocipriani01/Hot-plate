@@ -1,9 +1,7 @@
 # System
-import os
 import sys
-import time
-import pickle
 import traceback
+from time import time, sleep
 # GUI
 from settings_dialog import SettingsDialog
 from PyQt5 import QtWidgets, uic
@@ -34,15 +32,12 @@ class Worker(QObject):
             if self.connected and self.serial_port is not None:
                 try:
                     line = self.serial_port.readline().decode('utf-8').rstrip()
-                    self.serial_port.flush()
-                    if line != "":
-                        if line[0] == 'A':
-                            data = line[1:].split(',')
-                            self.data_signal.emit(
-                                float(data[0]), float(data[1]), float(data[2]))
-                        else:
-                            print("Serial message: " + line)
-                except UnicodeDecodeError as e:
+                    if line.startswith("A"):
+                        data = line[1:].split(',')
+                        self.data_signal.emit(float(data[0]), float(data[1]), float(data[2]))
+                    elif line != "":
+                        print("Serial message: " + line)
+                except UnicodeDecodeError:
                     pass
                 except Exception as e:
                     traceback.print_exc()
@@ -55,40 +50,23 @@ class ErrorDialog():
     def __init__(self, text):
         self.msg = QtWidgets.QMessageBox()
         self.msg.setIcon(QtWidgets.QMessageBox.Critical)
-        self.msg.setText("Error")
-        self.msg.setInformativeText(text)
         self.msg.setWindowTitle("Error")
+        self.msg.setText(text)
         self.msg.addButton(QtWidgets.QMessageBox.Ok)
         self.msg.exec_()
 
 
 class Main(QtWidgets.QMainWindow, layout_form):
+    min_temp = 30.0
+    max_temp = 260.0
+    k_P = 0.0
+    k_I = 0.0
+    k_D = 0.0
+    bang_bang_range = 0.0
 
     def __init__(self, parent=None):
         QtWidgets.QWidget.__init__(self, parent)
         self.setupUi(self)
-        if os.path.isfile("settings.plk"):
-            try:
-                with open("settings.plk", 'rb') as f:
-                    self.parameters = pickle.load(f)
-                self.min_temp = self.parameters["min_temp"]
-                self.max_temp = self.parameters["max_temp"]
-                self.k_P = self.parameters["k_P"]
-                self.k_I = self.parameters["k_I"]
-                self.k_D = self.parameters["k_D"]
-            except:
-                traceback.print_exc()
-                self.min_temp = 20.0
-                self.max_temp = 260.0
-                self.k_P = 1.2
-                self.k_I = 0.0
-                self.k_D = 0.0
-        else:
-            self.min_temp = 20.0
-            self.max_temp = 260.0
-            self.k_P = 1.2
-            self.k_I = 0.0
-            self.k_D = 0.0
         self.target_temp = self.min_temp
         # Serial port
         self.listPorts = list_ports.comports()
@@ -106,7 +84,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
         self.graphWidget.setLabel('bottom', 'Time (s)', **label_style)
         self.graphWidget.showGrid(x=True, y=True)
         self.graphWidget.setYRange(
-            self.min_temp - 10.0, self.max_temp + 10.0, padding=0)
+            min(self.min_temp - 10.0, 10.0), self.max_temp + 10.0, padding=0)
         self.time = []
         self.temperature = []
         self.reflow_overlay_enable = False
@@ -123,7 +101,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
         self.serial_port_combo.activated.connect(self.select_device)
         # Settings dialog
         self.settings_dialog = SettingsDialog(self)
-        self.settings_dialog.apply_signal.connect(self.update_settings)
+        self.settings_dialog.save_signal.connect(self.update_settings)
         # Worker thread
         self.worker = Worker()
         self.worker.parent = self
@@ -143,7 +121,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
             self.reflow_overlay_time = [0, 30, 120, 150, 195, 210, 225, 240, 250]
             for i in range(len(self.reflow_overlay)):
                 self.reflow_overlay_time[i] = self.reflow_overlay_time[i] + \
-                    (time.time() - self.initTime)
+                    (time() - self.initTime)
             self.graphWidget.plot(self.reflow_overlay_time, self.reflow_overlay,
                                   pen=self.reflow_profile_pen, symbol='+', symbolSize=15)
         else:
@@ -153,9 +131,8 @@ class Main(QtWidgets.QMainWindow, layout_form):
 
     def send_settings(self):
         try:
-            self.worker.serial_port.write(("$T" + str(int(self.k_P * 1000)) + "," +
-                                           str(int(self.k_I * 1000)) + "," +
-                                           str(int(self.k_D * 1000)) + "%").encode('utf-8'))
+            self.worker.serial_port.write(("$T" + str(self.k_P) + "," + str(self.k_I) + "," +
+                                           str(self.k_D) + "," + str(self.bang_bang_range) + "%").encode('utf-8'))
         except Exception as e:
             traceback.print_exc()
             ErrorDialog(e.args[0])
@@ -165,7 +142,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
         self.changeTemp()
 
     def clear_plot(self):
-        self.initTime = time.time()
+        self.initTime = time()
         self.time.clear()
         self.temperature.clear()
         self.reflow_overlay_enable = False
@@ -178,6 +155,10 @@ class Main(QtWidgets.QMainWindow, layout_form):
         self.connect_button.setDisabled(False)
 
     def open_settings(self):
+        self.settings_dialog.k_P_spinner.setValue(self.k_P)
+        self.settings_dialog.k_I_spinner.setValue(self.k_I)
+        self.settings_dialog.k_D_spinner.setValue(self.k_D)
+        self.settings_dialog.bang_bang_spinner.setValue(self.bang_bang_range)
         self.settings_dialog.exec_()
 
     def on_error(self, string):
@@ -186,7 +167,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
 
     def display_data(self, temp, rate_of_change, duty):
         self.temperature_display.display(temp)
-        self.time.append(time.time() - self.initTime)
+        self.time.append(time() - self.initTime)
         self.temperature.append(temp)
         self.graphWidget.plot(self.time, self.temperature,
                               pen=self.pen, clear=True)
@@ -202,20 +183,16 @@ class Main(QtWidgets.QMainWindow, layout_form):
         self.send_settings()
         self.target_temp = self.target_temp_spinner.value()
         try:
-            self.worker.serial_port.write(
-                ("$S" + str(int(self.target_temp * 100)) + "%").encode('utf-8'))
+            self.worker.serial_port.write(("$S" + str(self.target_temp) + "%").encode('utf-8'))
         except Exception as e:
             traceback.print_exc()
             ErrorDialog(e.args[0])
 
     def update_settings(self):
-        self.min_temp = self.settings_dialog.settings["min_temp"]
-        self.max_temp = self.settings_dialog.settings["max_temp"]
-        self.k_P = self.settings_dialog.settings["k_P"]
-        self.k_I = self.settings_dialog.settings["k_I"]
-        self.k_D = self.settings_dialog.settings["k_D"]
-        self.target_temp_spinner.setMinimum(self.min_temp)
-        self.target_temp_spinner.setMaximum(self.max_temp)
+        self.k_P = self.settings_dialog.k_P
+        self.k_I = self.settings_dialog.k_I
+        self.k_D = self.settings_dialog.k_D
+        self.bang_bang_range = self.settings_dialog.bang_bang_range
         try:
             self.send_settings()
             self.statusBar().showMessage("Settings updated successfully")
@@ -227,9 +204,8 @@ class Main(QtWidgets.QMainWindow, layout_form):
 
     def disconnect(self):
         try:
-            self.worker.serial_port.write(
-                ("$S" + str(int(self.min_temp * 100)) + "%").encode('utf-8'))
-            time.sleep(0.3)
+            self.worker.serial_port.write(("$S" + str(self.min_temp) + "%").encode('utf-8'))
+            sleep(0.3)
         except:
             pass
         self.worker.connected = False
@@ -247,23 +223,42 @@ class Main(QtWidgets.QMainWindow, layout_form):
             if self.serial_port_combo.currentText() != 'None':
                 portIndex = self.serial_port_combo.currentIndex()
                 try:
-                    self.worker.serial_port = serial.Serial(
-                        self.listPorts[portIndex].device, baudrate=115200, timeout=10, write_timeout=10)
-                    time.sleep(0.5)
-                    self.worker.connected = True
-                    self.clear_plot()
-                    self.statusBar().showMessage("Controller connected")
-                    self.connect_button.setText("Disconnect")
-                    self.target_temp_spinner.setDisabled(False)
-                    self.set_target_button.setDisabled(False)
-                    self.turn_off_button.setDisabled(False)
-                    self.settings_button.setDisabled(False)
-                    self.send_settings()
-                except Exception as erro:
-                    traceback.print_exc()
+                    serial_port = serial.Serial(
+                        self.listPorts[portIndex].device, baudrate=115200, timeout=2, write_timeout=1)
+                    serial_port.write("$E".encode('utf-8'))
+                    serial_port.flush()
+                    start_time = time()
+                    while (time() - start_time) <= 3.0:
+                        response = serial_port.readline().decode('utf-8').replace('\r', "").replace('\n', "")
+                        if response.startswith("E"):
+                            split = response[1:].split(",")
+                            self.k_P = float(split[0])
+                            self.k_I = float(split[1])
+                            self.k_D = float(split[2])
+                            self.bang_bang_range = float(split[3])
+                            self.min_temp = float(split[4])
+                            self.target_temp_spinner.setMinimum(self.min_temp)
+                            self.max_temp = float(split[5])
+                            self.target_temp_spinner.setMaximum(self.max_temp)
+                            self.worker.serial_port = serial_port
+                            self.worker.connected = True
+                            self.clear_plot()
+                            self.statusBar().showMessage("Controller connected")
+                            self.connect_button.setText("Disconnect")
+                            self.target_temp_spinner.setDisabled(False)
+                            self.set_target_button.setDisabled(False)
+                            self.turn_off_button.setDisabled(False)
+                            self.settings_button.setDisabled(False)
+                            self.send_settings()
+                            return
+                        serial_port.write("$E".encode('utf-8'))
+                    serial_port.close()
                     self.connect_button.setChecked(False)
-                    errorMessage = erro.args[0]
-                    ErrorDialog(errorMessage)
+                    ErrorDialog("No response from controller!")
+                except Exception as erro:
+                    self.connect_button.setChecked(False)
+                    traceback.print_exc()
+                    ErrorDialog(erro.args[0])
         else:
             self.disconnect()
 

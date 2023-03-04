@@ -2,8 +2,9 @@
 #define MAIN_H
 
 #include <math.h>
+#include <EEPROM.h>
 #include <Arduino.h>
-#include <PID_v2.h>
+#include <AutoPID.h>
 #include <thermistor.h>
 
 #include "config.h"
