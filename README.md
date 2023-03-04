@@ -1,6 +1,16 @@
 # Hot plate software
 
-Software for SMD soldering hot plates.
+Software for SMD soldering hot plates. Required components:
+
+- Arduino Nano
+- 104GT-2 thermistor
+- 4.7kΩ resistor
+- 10μF capacitor
+- Solid state relay (SSR)
+- A 260°C PTC hot plate
+- Kapton tape and/or thermal adhesive to secure the thermistor to the hot plate
+
+## Credits & license
 
 This project has been inspired, and/or uses pieces of code from the following other projects:
 

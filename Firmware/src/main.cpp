@@ -24,6 +24,8 @@ MedianFilter filter(MOVING_AVERAGE_WINDOW);
 int currentProfile = -1;
 int profileIndex = 0;
 unsigned long profileStartTime = 0L;
+unsigned long lastProfileSend = 0L;
+unsigned long lastProfileProgress = 0L;
 
 void setup() {
     pinMode(PWM_PIN, OUTPUT);
@@ -46,10 +48,10 @@ void setup() {
     controller.setBangBang(settings.bangBangRange);
     controller.setTimeStep(PID_SAMPLE_MS);
 
-    solderProfiles[0].name = LEADED_SMD291AX50T3_NAME;
-    solderProfiles[0].profile = &LEADED_SMD291AX50T3;
-    solderProfiles[1].name = UNLEADED_SMD291SNL_NAME;
-    solderProfiles[1].profile = &UNLEADED_SMD291SNL;
+    profiles[0].name = LEADED_SMD291AX50T3_NAME;
+    profiles[0].profile = LEADED_SMD291AX50T3;
+    profiles[1].name = UNLEADED_SMD291SNL_NAME;
+    profiles[1].profile = UNLEADED_SMD291SNL;
 }
 
 void loop() {
@@ -58,25 +60,42 @@ void loop() {
         pwm = 0.0;
     else if (filter.isReady())
         controller.run();
-    analogWrite(PWM_PIN, (int) pwm);
+    analogWrite(PWM_PIN, (int)pwm);
 
     unsigned long t = millis();
     if (currentProfile >= 0) {
-        const double (*profile)[PROFILES_SIZE][2] = solderProfiles[currentProfile].profile;
-        double delta = t - profileStartTime;
-        if (delta >= profile[profileIndex][0])
-            profileIndex++;
-
-        if (profileIndex < (PROFILES_SIZE - 2)) {
-            
-            const double (*prevPoint)[2] = profile[profileIndex];
-            const double (*nextPoint)[2] = profile[profileIndex + 1];
-            
-            
+        double elapsed = (t - profileStartTime) / 1000.0;
+        if ((profileIndex < (PROFILES_LENGTH - 2)) && (elapsed >= profiles[currentProfile].profile[profileIndex + 1][0])) profileIndex++;
+        if (profileIndex < (PROFILES_LENGTH - 2)) {
+            target = map(elapsed, profiles[currentProfile].profile[profileIndex][0], profiles[currentProfile].profile[profileIndex + 1][0],
+                         profiles[currentProfile].profile[profileIndex][1], profiles[currentProfile].profile[profileIndex + 1][1]);
+            if ((lastProfileProgress - t) >= 250L) {
+                Serial.print("Z");
+                Serial.println((int)(100.0 * elapsed / profiles[currentProfile].profile[PROFILES_LENGTH - 1][0]));
+                lastProfileProgress = t;
+            }
         } else {
+            target = profiles[currentProfile].profile[profileIndex][1];
             currentProfile = -1;
             profileIndex = 0;
             profileStartTime = 0L;
+            Serial.println("Reflow complete!");
+            Serial.println("Z100");
+        }
+        if ((t - lastProfileSend) >= 1000L) {
+            Serial.print("Reflow info:\n\tProfile: ");
+            Serial.print(profiles[currentProfile].name);
+            Serial.print("\n\tElapsed time: ");
+            Serial.print(elapsed, 2);
+            Serial.print("s\n\tProfile index: ");
+            Serial.print(profileIndex);
+            Serial.print("\n\tProfile time: ");
+            Serial.print(profiles[currentProfile].profile[profileIndex][0], 2);
+            Serial.print("s\n\tProfile temperature: ");
+            Serial.print(profiles[currentProfile].profile[profileIndex][1], 2);
+            Serial.print("\n\tInterpolated target temperature: ");
+            Serial.println(target, 2);
+            lastProfileSend = t;
         }
     }
 
@@ -84,7 +103,7 @@ void loop() {
         lastTemperature = temperature;
         lastDerivativeCalc = t;
     } else if ((t - lastDerivativeCalc) >= 1000L) {
-        derivative = 1000.0 * (temperature - lastTemperature) / ((double) (t - lastDerivativeCalc));
+        derivative = 1000.0 * (temperature - lastTemperature) / ((double)(t - lastDerivativeCalc));
         lastTemperature = temperature;
         lastDerivativeCalc = t;
     }
@@ -109,6 +128,10 @@ void serialEvent() {
                 target = Serial.parseFloat();
                 Serial.print("Target = ");
                 Serial.println(target, 2);
+                currentProfile = -1;
+                profileIndex = 0;
+                profileStartTime = 0L;
+                Serial.println("Z0");
                 break;
             }
 
@@ -143,7 +166,23 @@ void serialEvent() {
                 Serial.print(",");
                 Serial.print(MIN_TEMP, 2);
                 Serial.print(",");
-                Serial.println(MAX_TEMP, 2);
+                Serial.print(MAX_TEMP, 2);
+                Serial.print(",");
+                unsigned int profilesSize = sizeof(profiles) / sizeof(profiles[0]);
+                for (unsigned int i = 0; i < profilesSize; i++) {
+                    Serial.print(profiles[i].name);
+                    if (i != (profilesSize - 1)) Serial.print(",");
+                }
+                Serial.println();
+                break;
+            }
+
+            case 'R': {
+                currentProfile = Serial.parseInt();
+                profileStartTime = millis();
+                Serial.print("Start reflow: ");
+                Serial.println(profiles[currentProfile].name);
+                break;
             }
         }
     }

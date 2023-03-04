@@ -25,6 +25,7 @@ class Worker(QObject):
     # Signals
     ports_signal = pyqtSignal(list)
     data_signal = pyqtSignal(float, float, float)
+    progress_signal = pyqtSignal(int)
     error_signal = pyqtSignal(str)
 
     def loopWork(self):
@@ -35,9 +36,11 @@ class Worker(QObject):
                     if line.startswith("A"):
                         data = line[1:].split(',')
                         self.data_signal.emit(float(data[0]), float(data[1]), float(data[2]))
+                    elif line.startswith("Z"):
+                        self.progress_signal.emit(int(line[1:]))
                     elif line != "":
                         print("Serial message: " + line)
-                except UnicodeDecodeError:
+                except (UnicodeDecodeError, ValueError):
                     pass
                 except Exception as e:
                     traceback.print_exc()
@@ -63,6 +66,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
     k_I = 0.0
     k_D = 0.0
     bang_bang_range = 0.0
+    reflow_profiles = []
 
     def __init__(self, parent=None):
         QtWidgets.QWidget.__init__(self, parent)
@@ -99,6 +103,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
         self.turn_off_button.clicked.connect(self.turn_off_hot_plate)
         self.overlay_button.clicked.connect(self.show_reflow_overlay)
         self.serial_port_combo.activated.connect(self.select_device)
+        self.reflow_start_button.clicked.connect(self.start_reflow)
         # Settings dialog
         self.settings_dialog = SettingsDialog(self)
         self.settings_dialog.save_signal.connect(self.update_settings)
@@ -111,7 +116,14 @@ class Main(QtWidgets.QMainWindow, layout_form):
         self.executionThread.start()
         self.worker.ports_signal.connect(self.update_ports_list)
         self.worker.data_signal.connect(self.display_data)
+        self.worker.progress_signal.connect(self.update_progress)
         self.worker.error_signal.connect(self.on_error)
+
+    def update_progress(self, value):
+        self.progressBar.setValue(value)
+
+    def start_reflow(self):
+        self.worker.serial_port.write(("$R" + str(self.reflow_combo.currentIndex())).encode('utf-8'))
 
     def show_reflow_overlay(self):
         self.reflow_overlay_enable = not self.reflow_overlay_enable
@@ -217,6 +229,8 @@ class Main(QtWidgets.QMainWindow, layout_form):
         self.turn_off_button.setDisabled(True)
         self.settings_button.setDisabled(True)
         self.overlay_button.setDisabled(True)
+        self.reflow_start_button.setDisabled(True)
+        self.reflow_combo.clear()
 
     def connect_disconnect(self):
         if self.connect_button.isChecked() == True:
@@ -240,6 +254,9 @@ class Main(QtWidgets.QMainWindow, layout_form):
                             self.target_temp_spinner.setMinimum(self.min_temp)
                             self.max_temp = float(split[5])
                             self.target_temp_spinner.setMaximum(self.max_temp)
+                            self.reflow_profiles = split[6:]
+                            self.reflow_combo.clear()
+                            self.reflow_combo.addItems(self.reflow_profiles)
                             self.worker.serial_port = serial_port
                             self.worker.connected = True
                             self.clear_plot()
@@ -250,6 +267,7 @@ class Main(QtWidgets.QMainWindow, layout_form):
                             self.turn_off_button.setDisabled(False)
                             self.settings_button.setDisabled(False)
                             self.overlay_button.setDisabled(False)
+                            self.reflow_start_button.setDisabled(False)
                             self.send_settings()
                             return
                         serial_port.write("$E".encode('utf-8'))
